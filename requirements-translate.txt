@@ -1,0 +1,6 @@
+# Local machine translation (translate.py). On a GPU machine / Colab, install torch the usual way first.
+torch
+transformers>=4.56,<5    # IndicTransToolkit and IndicTrans2's model code don't support transformers 5 yet
+sentencepiece
+IndicTransToolkit
+tqdm>=4.66.0

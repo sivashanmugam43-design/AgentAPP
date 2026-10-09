@@ -1,7 +1,7 @@
 """Configuration settings for AgentAPP (temple.dinamalar.com district temple scraper)."""
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
@@ -90,20 +90,10 @@ class Settings:
         "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
     )
 
-    # Machine translation of fields the site has no English for (key: ANTHROPIC_API_KEY)
-    translate_model: str = os.getenv("TRANSLATE_MODEL", "claude-haiku-4-5")
-    translate_chunk_chars: int = int(os.getenv("TRANSLATE_CHUNK_CHARS", "1000"))
-
     # Storage
     output_dir: Path = BASE_DIR / os.getenv("OUTPUT_DIR", "output")
     progress_dir: Path = BASE_DIR / "data" / "progress"
-    cache_dir: Path = BASE_DIR / "data" / "cache"
     logs_dir: Path = BASE_DIR / "logs"
-
-    glossary: Dict[str, str] = field(default_factory=lambda: {
-        "அருள்மிகு": "Arulmigu",
-        "திருக்கோயில்": "Temple",
-    })
 
     # URLs
     @property
@@ -122,7 +112,7 @@ class Settings:
 
     def ensure_directories(self):
         """Ensure runtime directories exist."""
-        for d in (self.output_dir, self.progress_dir, self.cache_dir, self.logs_dir):
+        for d in (self.output_dir, self.progress_dir, self.logs_dir):
             d.mkdir(parents=True, exist_ok=True)
 
 

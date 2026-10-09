@@ -6,6 +6,9 @@ Full run (stages 1-3, then export to CSV/XLSX):
 Test run on Chennai, 5 temples:
     python main.py --district 46 --limit 5
 
+Fill missing English with the local model (see translate.py), then re-export:
+    python main.py --stage translate
+
 One stage only:
     python main.py --stage 2
 """
@@ -13,7 +16,6 @@ One stage only:
 import argparse
 import asyncio
 import logging
-import os
 import sys
 from datetime import date
 
@@ -36,26 +38,27 @@ class TqdmHandler(logging.StreamHandler):
 
 def setup_logging(verbose: bool = False) -> None:
     fmt = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
-    log.setLevel(logging.DEBUG)
     console = TqdmHandler()
     console.setLevel(logging.DEBUG if verbose else logging.INFO)
     file = logging.FileHandler(settings.logs_dir / f"scrape_{date.today().isoformat()}.log", encoding="utf-8")
     file.setLevel(logging.DEBUG)
     for handler in (console, file):
         handler.setFormatter(fmt)
-        log.addHandler(handler)
+    for logger in (log, logging.getLogger("translate")):  # translate.py logs under its own name
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(console)
+        logger.addHandler(file)
 
 
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scrape district temples from temple.dinamalar.com.")
     parser.add_argument("--stage", choices=STAGES, default="all",
                         help="1 = districts, 2 = temple index, 3 = temple details, translate = fill "
-                             "missing English, export = CSV/XLSX; default: all (1, 2, 3, export)")
+                             "missing English with the local model (translate.py), export = CSV/XLSX; "
+                             "default: all (1, 2, 3, export)")
     parser.add_argument("--district", help="Only this district id (e.g. 46 = Chennai) in stages 2, 3, translate")
     parser.add_argument("--limit", type=int, help="Process at most N items in this run "
                                                   "(stage 2: districts, stage 3 / translate: temples)")
-    parser.add_argument("--no-translate", action="store_true",
-                        help="Don't machine-translate; English comes only from the site's English pages")
     parser.add_argument("--refresh-districts", action="store_true", help="Re-download the district list")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug messages (retries, each failure)")
     args = parser.parse_args(argv)
@@ -64,15 +67,6 @@ def parse_args(argv=None) -> argparse.Namespace:
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
     return args
-
-
-def make_translator(args):
-    if args.no_translate:
-        return None
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise SystemExit("ANTHROPIC_API_KEY is not set (add it to .env), or run with --no-translate.")
-    from src.temples.translate import Translator
-    return Translator()
 
 
 def print_summary(store: Store, district_id=None) -> None:
@@ -91,7 +85,6 @@ def print_summary(store: Store, district_id=None) -> None:
 async def run(args) -> int:
     store = Store()
     stages = ["1", "2", "3", "export"] if args.stage == "all" else [args.stage]
-    translator = make_translator(args) if ("3" in stages or "translate" in stages) else None
     failed_before = store.failed_path.stat().st_size if store.failed_path.exists() else 0
 
     from src.temples.scraper import PoliteClient
@@ -109,13 +102,15 @@ async def run(args) -> int:
             if not store.load_index():
                 log.error("No temple index yet; run stage 2 first.")
                 return 2
-            stats = await pipeline.stage3_temples(client, store, translator, args.district, args.limit)
+            stats = await pipeline.stage3_temples(client, store, args.district, args.limit)
             log.info(f"Stage 3: {dict(stats)}")
     if "translate" in stages:
-        stats = await pipeline.stage_translate(store, translator, args.district, args.limit)
-        log.info(f"Translate: {dict(stats)}")
-    if translator is not None:
-        log.info(f"Translation: {translator.api_calls} API call(s), {len(translator.cache)} cached text(s)")
+        import translate
+        argv = ["--input", str(store.records_path)]
+        argv += ["--district", args.district] if args.district else []
+        argv += ["--limit", str(args.limit)] if args.limit else []
+        if translate.main(argv) != 0:
+            return 1
     if "export" in stages or "translate" in stages:
         paths = store.export()
         log.info(f"Exported {store.records_path.name} -> {paths['csv'].name}, {paths['xlsx'].name}")

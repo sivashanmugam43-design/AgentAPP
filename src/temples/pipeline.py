@@ -1,9 +1,9 @@
-"""The scrape stages, independent of HTTP details (the fetcher and translator are passed in).
+"""The scrape stages, independent of HTTP details (the fetcher is passed in).
 
 Stage 1  district list            -> districts.json
 Stage 2  each district's pages    -> temples_index.csv   (follows Page=N until there is no "Next >>")
-Stage 3  each temple (ta + en)    -> temples.jsonl       (English from the site, else machine-translated)
-translate                         fills English fields left blank (e.g. after a --no-translate run)
+Stage 3  each temple (ta + en)    -> temples.jsonl       (English from the site's English page)
+Missing English is filled afterwards by translate.py (local model).
 """
 
 import asyncio
@@ -25,10 +25,6 @@ MAX_PAGES_PER_DISTRICT = 500  # safety stop in case a "Next >>" link ever points
 
 class Fetcher(Protocol):
     async def get_text(self, url: str) -> str: ...
-
-
-class TranslatorLike(Protocol):
-    async def translate(self, text: str) -> str: ...
 
 
 # --- Stage 1 ---------------------------------------------------------------------------------------
@@ -135,24 +131,6 @@ def build_record(row: Dict[str, str], ta: Dict[str, Any], en: Optional[Dict[str,
     return record
 
 
-def missing_english(record: Dict[str, Any]) -> List[str]:
-    """Text fields with Tamil but no English yet."""
-    return [f for f in TEXT_FIELDS if record.get(f"{f}_ta") and not record.get(f"{f}_en")]
-
-
-async def fill_translations(record: Dict[str, Any], translator: TranslatorLike, store: Store) -> int:
-    """Machine-translate every field that has Tamil but no English. Returns fields still missing."""
-    still_missing = 0
-    for f in missing_english(record):
-        try:
-            record[f"{f}_en"] = await translator.translate(record[f"{f}_ta"])
-            record[f"{f}_source_en"] = "machine"
-        except Exception as e:
-            still_missing += 1
-            store.log_failure(record["url_ta"], f"translation of {f} failed: {type(e).__name__}: {e}")
-    return still_missing
-
-
 async def scrape_temple(fetcher: Fetcher, row: Dict[str, str]) -> Dict[str, Any]:
     tid = row["temple_id"]
     ta = parse_temple(await fetcher.get_text(settings.temple_url(tid)), "ta", settings.image_base_url)
@@ -166,8 +144,8 @@ async def scrape_temple(fetcher: Fetcher, row: Dict[str, str]) -> Dict[str, Any]
     return build_record(row, ta, en)
 
 
-async def stage3_temples(fetcher: Fetcher, store: Store, translator: Optional[TranslatorLike],
-                         district_id: Optional[str] = None, limit: Optional[int] = None) -> Counter:
+async def stage3_temples(fetcher: Fetcher, store: Store, district_id: Optional[str] = None,
+                         limit: Optional[int] = None) -> Counter:
     index = store.load_index()
     if district_id:
         index = [r for r in index if r["district_id"] == district_id]
@@ -192,8 +170,6 @@ async def stage3_temples(fetcher: Fetcher, store: Store, translator: Optional[Tr
             url = settings.temple_url(row["temple_id"])
             try:
                 record = await scrape_temple(fetcher, row)
-                if translator is not None:
-                    stats["translation_failed"] += await fill_translations(record, translator, store)
                 store.append_record(record)
                 stats["ok"] += 1
                 stats["english_page"] += record["english_page"] == "yes"
@@ -203,26 +179,8 @@ async def stage3_temples(fetcher: Fetcher, store: Store, translator: Optional[Tr
                 log.debug(f"Failed {url}: {e}")
             bar.update(1)
 
-    # Same width as the HTTP client's slot pool, so translation never queues up extra fetches
     await asyncio.gather(*(worker() for _ in range(settings.concurrency)))
     bar.close()
-    return stats
-
-
-# --- Translate stage -------------------------------------------------------------------------------
-
-async def stage_translate(store: Store, translator: TranslatorLike, district_id: Optional[str] = None,
-                          limit: Optional[int] = None) -> Counter:
-    """Fill English fields still blank in temples.jsonl (e.g. after --no-translate), then rewrite it."""
-    records = store.load_records()
-    todo = [r for r in records if missing_english(r) and (not district_id or r["district_id"] == district_id)]
-    if limit:
-        todo = todo[:limit]
-    stats: Counter = Counter()
-    for record in tqdm(todo, desc="Translating", unit="temple"):
-        stats["translation_failed"] += await fill_translations(record, translator, store)
-        stats["records"] += 1
-    store.rewrite_records(records)
     return stats
 
 

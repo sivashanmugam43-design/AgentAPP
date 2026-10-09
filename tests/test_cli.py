@@ -5,7 +5,7 @@ from main import parse_args
 
 def test_defaults_run_everything():
     a = parse_args([])
-    assert (a.stage, a.district, a.limit, a.no_translate) == ("all", None, None, False)
+    assert (a.stage, a.district, a.limit) == ("all", None, None)
 
 
 def test_test_run_args():

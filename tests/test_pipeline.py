@@ -1,10 +1,8 @@
-"""Pipeline, store, HTTP client and translator tests. No network: fake fetcher, fake Claude client,
-mock HTTP transport."""
+"""Pipeline, store and HTTP client tests. No network: fake fetcher, mock HTTP transport."""
 
 import asyncio
 import csv
 import json
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -13,7 +11,6 @@ from config.settings import settings
 from src.temples import pipeline
 from src.temples.scraper import FetchError, PoliteClient
 from src.temples.store import RECORD_COLUMNS, Store
-from src.temples.translate import TranslationCache, Translator, split_chunks
 
 
 def page(temples, next_page=None):
@@ -50,15 +47,6 @@ class FakeFetcher:
         if url in self.fail:
             raise FetchError("HTTP 503 (after 5 attempts)")
         return self.pages[url]
-
-
-class FakeTranslator:
-    def __init__(self):
-        self.calls = 0
-
-    async def translate(self, text):
-        self.calls += 1
-        return f"EN[{text}]"
 
 
 @pytest.fixture
@@ -101,7 +89,7 @@ def test_index_csv_has_bom_once_and_tamil_intact(store):
     assert [r["temple_name"] for r in store.load_index()] == ["அருள்மிகு", "திருக்கோயில்"]
 
 
-def test_stage3_site_english_machine_fallback_and_resume(store):
+def test_stage3_site_english_and_resume(store):
     store.append_index([
         {"district_id": "46", "district_name": "சென்னை", "temple_id": tid, "temple_name": "x",
          "url": settings.temple_url(tid)} for tid in ("1", "2", "3")])
@@ -111,23 +99,22 @@ def test_stage3_site_english_machine_fallback_and_resume(store):
         settings.temple_url("2"): temple_html("அருள்மிகு திருக்கோயில்", ""),  # empty template
         settings.temple_url("3"): temple_html("அருள்மிகு ராமர் திருக்கோயில்", "ராமர்"),
     }
-    translator = FakeTranslator()
-    stats = asyncio.run(pipeline.stage3_temples(FakeFetcher(pages), store, translator))
+    stats = asyncio.run(pipeline.stage3_temples(FakeFetcher(pages), store))
     assert (stats["ok"], stats["failed"], stats["english_page"]) == (2, 1, 1)
 
     recs = {r["temple_id"]: r for r in store.load_records()}
     assert set(recs) == {"1", "3"}
     r1 = recs["1"]
     assert (r1["moolavar_en"], r1["moolavar_source_en"]) == ("Kapaleeswarar", "site")
-    # On the Tamil page but blank in English -> machine translation
-    assert (r1["timings_en"], r1["timings_source_en"]) == ("EN[காலை 6 மணி]", "machine")
+    # On the Tamil page but blank in English: left for translate.py
+    assert (r1["timings_ta"], r1["timings_en"], r1["timings_source_en"]) == ("காலை 6 மணி", "", "")
     assert (r1["urchavar_ta"], r1["urchavar_en"], r1["urchavar_source_en"]) == ("", "", "")
     r3 = recs["3"]
-    assert r3["english_page"] == "no" and r3["name_source_en"] == "machine"
+    assert r3["english_page"] == "no" and (r3["name_en"], r3["name_source_en"]) == ("", "")
     assert "id=2\tTempleNotFound" in store.failed_path.read_text(encoding="utf-8")
 
     fetcher = FakeFetcher(pages)  # rerun: only the failed temple is tried again
-    asyncio.run(pipeline.stage3_temples(fetcher, store, translator))
+    asyncio.run(pipeline.stage3_temples(fetcher, store))
     assert fetcher.calls == [settings.temple_url("2")]
 
 
@@ -136,20 +123,8 @@ def test_stage3_district_filter_and_limit(store):
                         for d, t in (("46", "1"), ("46", "2"), ("46", "3"), ("47", "4"))])
     pages = {settings.temple_url(t): temple_html("n", "m") for t in "1234"}
     fetcher = FakeFetcher(pages)
-    asyncio.run(pipeline.stage3_temples(fetcher, store, None, district_id="46", limit=2))
+    asyncio.run(pipeline.stage3_temples(fetcher, store, district_id="46", limit=2))
     assert sorted(fetcher.calls) == [settings.temple_url("1"), settings.temple_url("2")]
-
-
-def test_translate_stage_fills_blanks_after_no_translate(store):
-    store.append_index([{"district_id": "46", "district_name": "", "temple_id": "3", "temple_name": "",
-                         "url": ""}])
-    pages = {settings.temple_url("3"): temple_html("அருள்மிகு ராமர் திருக்கோயில்", "ராமர்")}
-    asyncio.run(pipeline.stage3_temples(FakeFetcher(pages), store, None))
-    rec = store.load_records()[0]
-    assert rec["moolavar_en"] == "" and rec["moolavar_source_en"] == ""
-    asyncio.run(pipeline.stage_translate(store, FakeTranslator()))
-    rec = store.load_records()[0]
-    assert (rec["moolavar_en"], rec["moolavar_source_en"]) == ("EN[ராமர்]", "machine")
 
 
 def test_append_record_recovers_from_cut_line(store):
@@ -210,41 +185,3 @@ def test_client_gives_up_after_max_attempts_and_fails_fast_on_404():
     with pytest.raises(FetchError, match="HTTP 404"):
         run_client(missing)
     assert len(calls) == 1
-
-
-# --- Translator ----------------------------------------------------------------------------------
-
-class FakeMessages:
-    def __init__(self):
-        self.requests = []
-
-    async def create(self, **kw):
-        self.requests.append(kw)
-        text = kw["messages"][0]["content"]
-        return SimpleNamespace(stop_reason="end_turn",
-                               content=[SimpleNamespace(type="text", text=f"<{len(text)}>")])
-
-
-def test_split_chunks_respects_limit_and_keeps_text():
-    text = ("இது ஒரு வாக்கியம். " * 120).strip() + "\n" + "இரண்டாம் பத்தி."
-    chunks = split_chunks(text, 1000)
-    assert all(len(c) <= 1000 for c in chunks) and len(chunks) > 1
-    assert "".join(chunks) == text
-
-
-def test_translator_chunks_caches_and_uses_glossary(tmp_path):
-    fake = SimpleNamespace(messages=FakeMessages())
-    cache_path = tmp_path / "t.jsonl"
-    tr = Translator(client=fake, model="claude-haiku-4-5", chunk_chars=1000, cache=TranslationCache(cache_path))
-    text = "".join(f"அருள்மிகு கபாலீஸ்வரர் திருக்கோயில் {i}. " for i in range(60))  # ~2,300 chars -> 3 chunks
-    asyncio.run(tr.translate(text))
-    reqs = fake.messages.requests
-    assert len(reqs) == 3 and all(len(r["messages"][0]["content"]) <= 1000 for r in reqs)
-    assert reqs[0]["model"] == "claude-haiku-4-5"
-    assert "அருள்மிகு = Arulmigu" in reqs[0]["system"] and "திருக்கோயில் = Temple" in reqs[0]["system"]
-
-    # Rerun with a fresh translator on the same cache file: no API calls
-    fake2 = SimpleNamespace(messages=FakeMessages())
-    tr2 = Translator(client=fake2, chunk_chars=1000, cache=TranslationCache(cache_path))
-    assert asyncio.run(tr2.translate(text)) == asyncio.run(tr.translate(text))
-    assert fake2.messages.requests == []
