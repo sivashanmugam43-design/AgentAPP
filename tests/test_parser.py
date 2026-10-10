@@ -105,6 +105,7 @@ def test_list_page_link_forms_numbering_and_next():
     html = """<a href="new.php?id=314">1. திருவானைக்கா  ஜம்புகேஸ்வரர் திருக்கோயில்</a>
               <a href="new.php?cat=1&id=1072">2. அருள்மிகு\xa0\xa0சுப்பிரமணிய சுவாமி</a>
               <a href="download.php?id=906">ராமநாதர், ராமநாதபுரம்</a>
+              <a href="download_picture.php?id=16&cat=594">வடபழநி ஆண்டவர், சென்னை</a>
               <a href="new.php?id=498"><img src="x.jpg"></a>
               <a href="ayyappatharisanam_new.php?id=5">not a temple</a>
               <a href="news_detail.php?id=7">news</a>
@@ -114,6 +115,7 @@ def test_list_page_link_forms_numbering_and_next():
         {"temple_id": "314", "temple_name": "திருவானைக்கா ஜம்புகேஸ்வரர் திருக்கோயில்"},
         {"temple_id": "1072", "temple_name": "அருள்மிகு சுப்பிரமணிய சுவாமி"},
         {"temple_id": "906", "temple_name": "ராமநாதர், ராமநாதபுரம்"},
+        {"temple_id": "16", "temple_name": "வடபழநி ஆண்டவர், சென்னை"},
         {"temple_id": "498", "temple_name": ""},
     ]
     assert next_href == "koillist.php?cat=7&Page=2"

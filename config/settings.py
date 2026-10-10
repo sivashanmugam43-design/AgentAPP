@@ -77,7 +77,7 @@ CATEGORIES: List[Tuple[int, str, str, Optional[str]]] = [
     (1, "பார்க்க வேண்டிய பத்து கோயில்கள்", "imp_templelist.php", "imp_templelist.php?D="),
     (2, "விநாயகர் கோயில்", "koillist.php?cat=5", None),
     (3, "அறுபடைவீடு", "aarupadai.php?cat=1", None),
-    (4, "முருகன் கோயில்", "koillist.php?cat=594", None),
+    (4, "முருகன் கோயில்", "temple_photo.php?id=594", None),
     (5, "திருப்புகழ் தலங்கள்", "koillist.php?cat=996", None),
     (6, "ஜோதிர் லிங்கம் 12", "12_jothir_lingam.php", None),
     (7, "தேவாரம் பாடல் பெற்ற 274-சிவாலயம்", "koillist.php?cat=7", None),

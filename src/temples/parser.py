@@ -24,8 +24,9 @@ from bs4 import BeautifulSoup, Tag
 from config.settings import KV_LABELS, ROUTE_LABELS, SECTION_LABELS
 
 _ID_RE = re.compile(r"[?&]id=(\d+)")
-# A temple link on a list page: new.php?id=N, new.php?cat=1&id=N, or download.php?id=N (same ids)
-_TEMPLE_HREF_RE = re.compile(r"(?:^|/)(?:new|download)\.php\?(?:[^#]*&)?id=(\d+)")
+# A temple link on a list page: new.php?id=N, new.php?cat=1&id=N, download.php?id=N or
+# download_picture.php?id=N&cat=594 (all the same temple ids)
+_TEMPLE_HREF_RE = re.compile(r"(?:^|/)(?:new|download|download_picture)\.php\?(?:[^#]*&)?id=(\d+)")
 _PHOTO_RE = re.compile(r"Photo=([\w.]+)")
 
 
