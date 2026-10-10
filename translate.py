@@ -178,6 +178,7 @@ class IndicTrans2:
             from IndicTransToolkit import IndicProcessor
         model_id = MODELS[self.name]
         self.torch, self.device, self.num_beams = torch, device, num_beams
+        self.use_cache = True
         self.ip = IndicProcessor(inference=True)
         self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(
@@ -193,11 +194,25 @@ class IndicTrans2:
         batch = self.ip.preprocess_batch(sentences, src_lang=SRC_LANG, tgt_lang=TGT_LANG)
         inputs = self.tokenizer(batch, truncation=True, padding="longest", return_tensors="pt",
                                 return_attention_mask=True).to(self.device)
-        with self.torch.inference_mode():
-            out = self.model.generate(**inputs, use_cache=True, min_length=0, max_length=MAX_NEW_TOKENS,
-                                      num_beams=self.num_beams, num_return_sequences=1)
+        try:
+            out = self._generate(inputs)
+        except AttributeError as e:
+            # The model's remote code indexes past_key_values as legacy tuples; newer transformers pass a
+            # Cache object instead ('NoneType' object has no attribute 'shape'). Generate without it.
+            if not self.use_cache:
+                raise
+            log.warning(f"IndicTrans2 can't use the generation cache with this transformers version ({e}); "
+                        f"continuing without it (slower)")
+            self.use_cache = False
+            out = self._generate(inputs)
         decoded = self.tokenizer.batch_decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         return self.ip.postprocess_batch(decoded, lang=TGT_LANG)
+
+    def _generate(self, inputs):
+        with self.torch.inference_mode():
+            return self.model.generate(**inputs, use_cache=self.use_cache, min_length=0,
+                                       max_length=MAX_NEW_TOKENS, num_beams=self.num_beams,
+                                       num_return_sequences=1)
 
 
 class NLLB:
