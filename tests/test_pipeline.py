@@ -81,9 +81,9 @@ def test_stage2_follows_next_and_resumes_after_failure(store):
 
 def test_index_csv_has_bom_once_and_tamil_intact(store):
     store.append_index([{"district_id": "46", "district_name": "சென்னை", "temple_id": "1",
-                         "temple_name": "அருள்மிகு", "url": "u1"}])
+                         "temple_name": "அருள்மிகு"}])
     store.append_index([{"district_id": "46", "district_name": "சென்னை", "temple_id": "2",
-                         "temple_name": "திருக்கோயில்", "url": "u2"}])
+                         "temple_name": "திருக்கோயில்"}])
     raw = store.index_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf") and raw.count(b"\xef\xbb\xbf") == 1
     assert [r["temple_name"] for r in store.load_index()] == ["அருள்மிகு", "திருக்கோயில்"]
@@ -91,8 +91,8 @@ def test_index_csv_has_bom_once_and_tamil_intact(store):
 
 def test_stage3_site_english_and_resume(store):
     store.append_index([
-        {"district_id": "46", "district_name": "சென்னை", "temple_id": tid, "temple_name": "x",
-         "url": settings.temple_url(tid)} for tid in ("1", "2", "3")])
+        {"district_id": "46", "district_name": "சென்னை", "temple_id": tid, "temple_name": "x"}
+        for tid in ("1", "2", "3")])
     pages = {
         settings.temple_url("1"): temple_html("அருள்மிகு கபாலீஸ்வரர் திருக்கோயில்", "கபாலீசுவரர்", english=True),
         settings.temple_url_en("1"): english_html(),
@@ -119,7 +119,7 @@ def test_stage3_site_english_and_resume(store):
 
 
 def test_stage3_district_filter_and_limit(store):
-    store.append_index([{"district_id": d, "district_name": "", "temple_id": t, "temple_name": "", "url": ""}
+    store.append_index([{"district_id": d, "district_name": "", "temple_id": t, "temple_name": ""}
                         for d, t in (("46", "1"), ("46", "2"), ("46", "3"), ("47", "4"))])
     pages = {settings.temple_url(t): temple_html("n", "m") for t in "1234"}
     fetcher = FakeFetcher(pages)
@@ -138,7 +138,7 @@ def test_export_csv_and_xlsx(store):
     rec = {c: "" for c in RECORD_COLUMNS}
     rec.update(temple_id="628", district_id="46", name_ta="அருள்மிகு கபாலீஸ்வரர் திருக்கோயில்",
                name_en="Sri Kapaleeswarar temple", name_source_en="site",
-               gallery=[{"url": "u", "caption_ta": "அம்மன்"}], history_ta="அ" * 40000)
+               gallery=[{"caption_ta": "அம்மன்", "caption_en": "Amman"}], history_ta="அ" * 40000)
     paths = store.export([rec])
     raw = paths["csv"].read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")

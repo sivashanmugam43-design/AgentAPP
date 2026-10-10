@@ -73,8 +73,7 @@ async def stage2_index(fetcher: Fetcher, store: Store, districts: List[Dict[str,
                 break
             new = [t for t in temples if t["temple_id"] not in seen]
             seen.update(t["temple_id"] for t in new)
-            store.append_index({"district_id": did, "district_name": d["district_name"],
-                                "url": settings.temple_url(t["temple_id"]), **t} for t in new)
+            store.append_index({"district_id": did, "district_name": d["district_name"], **t} for t in new)
             # Rows are written before progress, so a crash in between only re-reads one page
             progress.update(last_page=page, complete=not has_next,
                             temples=progress.get("temples", 0) + len(new))
@@ -103,8 +102,6 @@ def build_record(row: Dict[str, str], ta: Dict[str, Any], en: Optional[Dict[str,
         "temple_id": tid,
         "district_id": row.get("district_id", ""),
         "district_name": row.get("district_name", ""),
-        "url_ta": settings.temple_url(tid),
-        "url_en": settings.temple_url_en(tid) if en else "",
         "english_page": "yes" if en else "no",
     }
     for f in TEXT_FIELDS:
@@ -119,9 +116,8 @@ def build_record(row: Dict[str, str], ta: Dict[str, Any], en: Optional[Dict[str,
         "category_id": ta.get("category_id", ""),
         "latitude": ta.get("latitude", ""),
         "longitude": ta.get("longitude", ""),
-        "main_image": ta.get("main_image", ""),
-        "gallery": [{"url": g["url"], "thumb": g["thumb"], "caption_ta": g["caption"],
-                     "caption_en": en_captions.get(g["photo"], "")} for g in ta.get("gallery", [])],
+        "gallery": [{"caption_ta": g["caption"], "caption_en": en_captions.get(g["photo"], "")}
+                    for g in ta.get("gallery", [])],
         "nearby_ta": ta.get("nearby", []),
         "nearby_en": (en or {}).get("nearby", []),
         "extra_ta": ta.get("extra", {}),

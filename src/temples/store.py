@@ -18,11 +18,11 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 
 from config.settings import TEXT_FIELDS, settings
 
-INDEX_COLUMNS = ["district_id", "district_name", "temple_id", "temple_name", "url"]
+INDEX_COLUMNS = ["district_id", "district_name", "temple_id", "temple_name"]
 
 # Record columns in export order; each TEXT_FIELDS entry expands to _ta, _en, _source_en
-LEAD_COLUMNS = ["temple_id", "district_id", "district_name", "url_ta", "url_en", "english_page"]
-TAIL_COLUMNS = ["category_id", "latitude", "longitude", "main_image", "gallery",
+LEAD_COLUMNS = ["temple_id", "district_id", "district_name", "english_page"]
+TAIL_COLUMNS = ["category_id", "latitude", "longitude", "gallery",
                 "nearby_ta", "nearby_en", "extra_ta", "extra_en", "scraped_at"]
 RECORD_COLUMNS = (LEAD_COLUMNS
                   + [f"{f}_{suffix}" for f in TEXT_FIELDS for suffix in ("ta", "en", "source_en")]

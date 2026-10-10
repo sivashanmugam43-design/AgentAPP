@@ -85,10 +85,10 @@ source is `site` (from the English page), `machine` (translated), or empty (no T
 | special_features | சிறப்பம்சம் (sub-sections as `label: text`) | Special Features |
 | location / railway / airport / accommodation | செல்லும் வழி tab | How to reach tab |
 
-Other columns: `temple_id`, `district_id`, `district_name`, `url_ta`, `url_en`, `english_page`,
-`latitude`, `longitude`, `main_image`, `gallery` (JSON list: large image URL, thumbnail, Tamil and
-English caption), `nearby_ta` / `nearby_en` (names), `extra_ta` / `extra_en` (any section with a
-label not listed above), `scraped_at`.
+Other columns: `temple_id`, `district_id`, `district_name`, `english_page`,
+`latitude`, `longitude`, `gallery` (JSON list: Tamil and English photo captions; no image links),
+`nearby_ta` / `nearby_en` (names), `extra_ta` / `extra_en` (any section with a label not listed
+above), `scraped_at`. Page URLs and image links are not saved.
 
 Site quirks the parser handles:
 - An unknown id, or the English URL of a temple without an English version, still returns HTTP 200,
