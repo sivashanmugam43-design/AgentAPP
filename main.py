@@ -21,13 +21,13 @@ from datetime import date
 
 from tqdm import tqdm
 
-from config.settings import settings
+from config.settings import CATEGORIES, settings
 from src.temples import pipeline
 from src.temples.store import Store
 
 log = logging.getLogger("agentapp")
 
-STAGES = ["1", "2", "3", "translate", "export", "all"]
+STAGES = ["1", "2", "3", "categories", "translate", "export", "all"]
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -53,9 +53,12 @@ def setup_logging(verbose: bool = False) -> None:
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scrape district temples from temple.dinamalar.com.")
     parser.add_argument("--stage", choices=STAGES, default="all",
-                        help="1 = districts, 2 = temple index, 3 = temple details, translate = fill "
+                        help="1 = districts, 2 = temple index, 3 = temple details, categories = the "
+                             "site's menu lists 1-28 (temples not scraped yet are added), translate = fill "
                              "missing English with the local model (translate.py), export = CSV/XLSX; "
                              "default: all (1, 2, 3, export)")
+    parser.add_argument("--category", type=int, choices=[c[0] for c in CATEGORIES], metavar="N",
+                        help="Only this menu list in the categories stage (1-28, no 23)")
     parser.add_argument("--district", help="Only this district id (e.g. 46 = Chennai) in stages 2, 3, translate")
     parser.add_argument("--limit", type=int, help="Process at most N items in this run "
                                                   "(stage 2: districts, stage 3 / translate: temples)")
@@ -104,6 +107,9 @@ async def run(args) -> int:
                 return 2
             stats = await pipeline.stage3_temples(client, store, args.district, args.limit)
             log.info(f"Stage 3: {dict(stats)}")
+        if "categories" in stages:
+            stats = await pipeline.stage_categories(client, store, args.category, args.limit)
+            log.info(f"Categories: {dict(stats)}")
     if "translate" in stages:
         import translate
         argv = ["--input", str(store.records_path)]
@@ -111,7 +117,7 @@ async def run(args) -> int:
         argv += ["--limit", str(args.limit)] if args.limit else []
         if translate.main(argv) != 0:
             return 1
-    if "export" in stages or "translate" in stages:
+    if {"export", "translate", "categories"} & set(stages):
         paths = store.export()
         log.info(f"Exported {store.records_path.name} -> {paths['csv'].name}, {paths['xlsx'].name}")
 

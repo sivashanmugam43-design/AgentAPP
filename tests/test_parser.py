@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from src.temples.parser import normalize_label, parse_district_page, parse_districts, parse_temple
+from src.temples.parser import (normalize_label, parse_district_page, parse_districts, parse_list_page,
+                                parse_sub_lists, parse_temple)
 
 FIX = Path(__file__).parent / "fixtures"
 IMG = "https://imgtemple.dinamalar.com/kovilimages"
@@ -98,3 +99,29 @@ def test_temple_without_english_page():
 
 def test_unknown_temple_id():
     assert not parse_temple(read("temple_missing_ta.html"), "ta", IMG)["found"]
+
+
+def test_list_page_link_forms_numbering_and_next():
+    html = """<a href="new.php?id=314">1. திருவானைக்கா  ஜம்புகேஸ்வரர் திருக்கோயில்</a>
+              <a href="new.php?cat=1&id=1072">2. அருள்மிகு\xa0\xa0சுப்பிரமணிய சுவாமி</a>
+              <a href="download.php?id=906">ராமநாதர், ராமநாதபுரம்</a>
+              <a href="new.php?id=498"><img src="x.jpg"></a>
+              <a href="ayyappatharisanam_new.php?id=5">not a temple</a>
+              <a href="news_detail.php?id=7">news</a>
+              <a href="koillist.php?cat=7&Page=2">2</a><a href="koillist.php?cat=7&Page=2">Next &gt;&gt;</a>"""
+    temples, next_href = parse_list_page(html)
+    assert temples == [
+        {"temple_id": "314", "temple_name": "திருவானைக்கா ஜம்புகேஸ்வரர் திருக்கோயில்"},
+        {"temple_id": "1072", "temple_name": "அருள்மிகு சுப்பிரமணிய சுவாமி"},
+        {"temple_id": "906", "temple_name": "ராமநாதர், ராமநாதபுரம்"},
+        {"temple_id": "498", "temple_name": ""},
+    ]
+    assert next_href == "koillist.php?cat=7&Page=2"
+    assert parse_list_page('<a href="new.php?id=1">அ</a>')[1] is None
+
+
+def test_sub_lists_of_a_hub_page():
+    html = """<a href="cholar_temple.php?cat=534&dt=5">சித்தூர்</a><a href="cholar_dist.php">menu</a>
+              <a href="cholar_temple.php?cat=534&dt=46">சென்னை</a><a href="cholar_temple.php?cat=534&dt=5">again</a>"""
+    assert parse_sub_lists(html, "cholar_temple.php?") == ["cholar_temple.php?cat=534&dt=5",
+                                                           "cholar_temple.php?cat=534&dt=46"]

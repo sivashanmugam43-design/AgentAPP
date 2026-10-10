@@ -10,6 +10,7 @@ output/temples.csv / .xlsx   export of temples.jsonl
 """
 
 import csv
+import io
 import json
 import os
 from datetime import datetime
@@ -19,6 +20,8 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from config.settings import TEXT_FIELDS, settings
 
 INDEX_COLUMNS = ["district_id", "district_name", "temple_id", "temple_name"]
+# source: "existing" = already in temples.jsonl when listed (not fetched again), "new" = fetched for it
+CATEGORY_COLUMNS = ["category_no", "category_name", "temple_id", "temple_name", "source"]
 
 # Record columns in export order; each TEXT_FIELDS entry expands to _ta, _en, _source_en
 LEAD_COLUMNS = ["temple_id", "district_id", "district_name", "english_page"]
@@ -46,6 +49,7 @@ class Store:
         self.districts_path = self.out / "districts.json"
         self.index_path = self.out / "temples_index.csv"
         self.stage2_path = self.progress / "stage2.json"
+        self.categories_path = self.out / "temple_categories.csv"
         self.records_path = self.out / "temples.jsonl"
         self.failed_path = self.out / "failed.log"
 
@@ -83,6 +87,20 @@ class Store:
                 csv.DictWriter(f, INDEX_COLUMNS).writeheader()
         with self.index_path.open("a", encoding="utf-8", newline="") as f:
             csv.DictWriter(f, INDEX_COLUMNS).writerows(rows)
+
+    # --- Categories ------------------------------------------------------------------------------
+    def load_categories(self) -> List[Dict[str, str]]:
+        if not self.categories_path.exists():
+            return []
+        with self.categories_path.open(encoding="utf-8-sig", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def save_categories(self, rows: List[Dict[str, str]]) -> None:
+        text = io.StringIO(newline="")
+        writer = csv.DictWriter(text, CATEGORY_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+        _write_atomic(self.categories_path, "\ufeff" + text.getvalue())  # BOM: Excel reads Tamil
 
     # --- Stage 3 ---------------------------------------------------------------------------------
     def load_records(self) -> List[Dict[str, Any]]:

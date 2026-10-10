@@ -22,13 +22,15 @@ pip install -r requirements-translate.txt   # only for translating locally (see 
 ```bash
 python main.py --district 46 --limit 5     # test: Chennai, 5 temples
 python main.py                             # everything: stages 1, 2, 3, then CSV/XLSX export
+python main.py --stage categories          # the menu's temple lists 1-28 (see below)
 ```
 
 | Flag | Notes |
 |---|---|
-| `--stage 1\|2\|3` | run one stage only; also `translate` and `export` (default: `all` = 1, 2, 3, export) |
+| `--stage 1\|2\|3` | run one stage only; also `categories`, `translate` and `export` (default: `all` = 1, 2, 3, export) |
+| `--category N` | one menu list only in the `categories` stage (1-28, no 23) |
 | `--district <id>` | one district only (stages 2, 3, translate), e.g. `46` = சென்னை |
-| `--limit N` | at most N items this run (stage 2: districts, stage 3 / translate: temples) |
+| `--limit N` | at most N items this run (stage 2: districts, stage 3 / categories / translate: temples) |
 | `--refresh-districts` | download the district list again |
 | `-v` | show retries and each failure on screen (always written to `logs/`) |
 
@@ -43,10 +45,23 @@ retry only the failed items.
 | 1 | `district_temple_list.php` | `output/districts.json` (33 districts) |
 | 2 | `district_temple.php?id=<d>&Page=N`, until a page has no **Next >>** | `output/temples_index.csv`: one row per temple, unique by `temple_id`; progress in `data/progress/stage2.json` |
 | 3 | `new.php?id=<t>`, and `en/new_en.php?id=<t>` when the Tamil page links to it | `output/temples.jsonl`: one line per temple, appended as parsed |
+| categories | the menu's temple lists 1-28 without 23 (தனியார் கோயில்): `koillist.php?cat=<c>&Page=N` and the special list pages | `output/temple_categories.csv`: one row per list and temple; temples not in `temples.jsonl` yet are added to it; then export |
 | translate | `temples.jsonl` | the same file, blank English fields filled by `translate.py`; then export |
 | export | `temples.jsonl` | `output/temples.csv` (UTF-8 with BOM, so Excel shows Tamil) and `output/temples.xlsx` |
 
 Failures (URL + reason) go to `output/failed.log`. A single failure never stops the run.
+
+### Categories
+
+The site's temple menu starts with 28 lists (பார்க்க வேண்டிய பத்து கோயில்கள் ... திருவாவடுதுறை ஆதீனம்
+கோயில்கள்); item 29 is the district list of stages 1-3. The `categories` stage reads lists 1-28
+except 23 (private temples). `config/settings.py` (`CATEGORIES`) has the number, name and page of each.
+
+A temple is scraped once. If a listed temple is already in `temples.jsonl` it is not fetched again:
+its `temple_categories.csv` row has `source` = `existing` and refers to that record by `temple_id`.
+Temples that are not there yet are fetched like stage 3 and appended (`source` = `new`); they have
+no `district_id`, because a category list doesn't give one. A temple in several lists has one row
+per list. A list that fails part-way is not saved and is read again on the next run.
 
 ## Politeness
 

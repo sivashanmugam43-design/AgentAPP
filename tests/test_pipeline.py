@@ -185,3 +185,44 @@ def test_client_gives_up_after_max_attempts_and_fails_fast_on_404():
     with pytest.raises(FetchError, match="HTTP 404"):
         run_client(missing)
     assert len(calls) == 1
+
+
+def test_categories_reuse_existing_records_and_fetch_only_new(store, monkeypatch):
+    monkeypatch.setattr(pipeline, "CATEGORIES", [(7, "சிவாலயம்", "koillist.php?cat=7", None),
+                                                 (24, "சோழர்", "cholar_dist.php", "cholar_temple.php?")])
+    store.append_record({"temple_id": "1", "district_id": "46", "name_ta": "already scraped"})
+    u = settings.page_url
+    pages = {
+        u("koillist.php?cat=7"): '<a href="new.php?id=1">1. ஒன்று</a><a href="koillist.php?cat=7&Page=2">Next</a>',
+        u("koillist.php?cat=7&Page=2"): '<a href="new.php?id=2">2. இரண்டு</a>',
+        u("cholar_dist.php"): '<a href="cholar_temple.php?cat=534&dt=46">சென்னை</a>',
+        u("cholar_temple.php?cat=534&dt=46"): '<a href="new.php?id=2">இரண்டு</a><a href="new.php?id=3">மூன்று</a>',
+        settings.temple_url("2"): temple_html("அருள்மிகு இரண்டு திருக்கோயில்", "மூலவர்"),
+        settings.temple_url("3"): temple_html("அருள்மிகு மூன்று திருக்கோயில்", "மூலவர்"),
+    }
+    fetcher = FakeFetcher(pages)
+    stats = asyncio.run(pipeline.stage_categories(fetcher, store))
+    assert stats["ok"] == 2 and settings.temple_url("1") not in fetcher.calls
+    assert [(r["category_no"], r["temple_id"], r["temple_name"], r["source"]) for r in store.load_categories()] == [
+        ("7", "1", "ஒன்று", "existing"), ("7", "2", "இரண்டு", "new"),
+        ("24", "2", "இரண்டு", "new"), ("24", "3", "மூன்று", "new")]
+    assert store.categories_path.read_bytes().startswith(b"\xef\xbb\xbf")
+    assert sorted(r["temple_id"] for r in store.load_records()) == ["1", "2", "3"]
+    assert {r["district_id"] for r in store.load_records() if r["temple_id"] != "1"} == {""}
+    assert [r["district_id"] for r in pipeline.district_counts(store)] == ["", "46"]
+
+    fetcher = FakeFetcher(pages)  # second run: categories listed, every temple scraped, nothing fetched
+    asyncio.run(pipeline.stage_categories(fetcher, store))
+    assert fetcher.calls == []
+
+
+def test_failed_category_is_listed_again_next_run(store, monkeypatch):
+    monkeypatch.setattr(pipeline, "CATEGORIES", [(7, "சிவாலயம்", "koillist.php?cat=7", None)])
+    u = settings.page_url
+    pages = {u("koillist.php?cat=7"): '<a href="new.php?id=1">ஒன்று</a><a href="koillist.php?cat=7&Page=2">Next</a>',
+             u("koillist.php?cat=7&Page=2"): '<a href="new.php?id=2">இரண்டு</a>',
+             settings.temple_url("1"): temple_html("n", "m"), settings.temple_url("2"): temple_html("n", "m")}
+    asyncio.run(pipeline.stage_categories(FakeFetcher(pages, fail=[u("koillist.php?cat=7&Page=2")]), store))
+    assert store.load_categories() == [] and store.load_records() == []
+    asyncio.run(pipeline.stage_categories(FakeFetcher(pages), store))
+    assert [r["temple_id"] for r in store.load_categories()] == ["1", "2"]

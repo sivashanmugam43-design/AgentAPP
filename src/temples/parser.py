@@ -1,4 +1,5 @@
-"""Parsers for temple.dinamalar.com: the district list, a district's temple list, and a temple page.
+"""Parsers for temple.dinamalar.com: the district list, temple lists (district and menu category),
+and a temple page.
 
 HTML structure verified against live pages on 2026-10-09 (see tests/fixtures/fetch_fixtures.py).
 All pages are server-rendered; nothing here needs JavaScript.
@@ -23,6 +24,8 @@ from bs4 import BeautifulSoup, Tag
 from config.settings import KV_LABELS, ROUTE_LABELS, SECTION_LABELS
 
 _ID_RE = re.compile(r"[?&]id=(\d+)")
+# A temple link on a list page: new.php?id=N, new.php?cat=1&id=N, or download.php?id=N (same ids)
+_TEMPLE_HREF_RE = re.compile(r"(?:^|/)(?:new|download)\.php\?(?:[^#]*&)?id=(\d+)")
 _PHOTO_RE = re.compile(r"Photo=([\w.]+)")
 
 
@@ -67,18 +70,33 @@ def parse_districts(html: str) -> List[Dict[str, str]]:
     return out
 
 
+def parse_list_page(html: str) -> Tuple[List[Dict[str, str]], Optional[str]]:
+    """One page of a temple list -> ([{temple_id, temple_name}], href of the "Next >>" page or None).
+    Names lose the list numbering ("12. "); a temple linked only by its photo has an empty name."""
+    soup = BeautifulSoup(html, "lxml")
+    temples: Dict[str, Dict[str, str]] = {}
+    for a in soup.find_all("a", href=True):
+        m = _TEMPLE_HREF_RE.search(a["href"])
+        if not m:
+            continue
+        name = re.sub(r"^\d+\.\s*", "", re.sub(r"\s+", " ", a.get_text(" ", strip=True))).strip()
+        if m.group(1) not in temples or (name and not temples[m.group(1)]["temple_name"]):
+            temples[m.group(1)] = {"temple_id": m.group(1), "temple_name": name}
+    next_href = next((a["href"] for a in soup.find_all("a", href=True)
+                      if "Next" in a.get_text() and "Page=" in a["href"]), None)
+    return list(temples.values()), next_href
+
+
 def parse_district_page(html: str) -> Tuple[List[Dict[str, str]], bool]:
     """One page of a district's temple list -> ([{temple_id, temple_name}], has_next_page)."""
+    temples, next_href = parse_list_page(html)
+    return [t for t in temples if t["temple_name"]], next_href is not None
+
+
+def parse_sub_lists(html: str, marker: str) -> List[str]:
+    """A hub page (one list per city or district) -> hrefs of its lists, in page order, deduped."""
     soup = BeautifulSoup(html, "lxml")
-    temples, seen = [], set()
-    for a in soup.select('a[href*="new.php?id="]'):
-        tid, name = _id_of(a["href"]), a.get_text(" ", strip=True)
-        if tid and name and tid not in seen and "new_en.php" not in a["href"]:
-            seen.add(tid)
-            temples.append({"temple_id": tid, "temple_name": name})
-    has_next = any("Next" in a.get_text() and "Page=" in a.get("href", "")
-                   for a in soup.select('a[href*="district_temple.php"]'))
-    return temples, has_next
+    return list(dict.fromkeys(a["href"] for a in soup.find_all("a", href=True) if marker in a["href"]))
 
 
 # --- Temple page ----------------------------------------------------------------------------------
