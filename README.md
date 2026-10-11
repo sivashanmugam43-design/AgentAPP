@@ -87,6 +87,8 @@ python main.py --stage hrce-compare                                    # writes 
   `confirmed` when the place is the same and the name nearly so (or the pincode and the very same name), else
   `doubtful`. The same file sets HR&CE's remedy and prayer headings beside the themes Dinamalar's prayer text names
   (yes / no = HR&CE's text names it or not, ? = HR&CE has no text, blank = Dinamalar does not name it).
+  `two_source` marks the temples where both sources speak, on a confirmed link only: `pariharam` when HR&CE
+  lists a remedy for the temple, `theme` when its text names a theme that Dinamalar names.
 - The detail behind each speciality heading opens in a pop-up and is not read.
 
 ## Keeping the PC awake for a long run

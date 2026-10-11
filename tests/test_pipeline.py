@@ -210,6 +210,9 @@ def test_categories_reuse_existing_records_and_fetch_only_new(store, monkeypatch
     assert sorted(r["temple_id"] for r in store.load_records()) == ["1", "2", "3"]
     assert {r["district_id"] for r in store.load_records() if r["temple_id"] != "1"} == {""}
     assert [r["district_id"] for r in pipeline.district_counts(store)] == ["", "46"]
+    # a data folder may hold relabelled ids (D001 ...): the summary must still print
+    store.append_index([{"district_id": "D002", "district_name": "x", "temple_id": "9", "temple_name": "y"}])
+    assert [r["district_id"] for r in pipeline.district_counts(store)] == ["", "46", "D002"]
 
     fetcher = FakeFetcher(pages)  # second run: categories listed, every temple scraped, nothing fetched
     asyncio.run(pipeline.stage_categories(fetcher, store))

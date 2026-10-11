@@ -23,8 +23,17 @@ def test_themes_say_whether_hrce_names_what_dinamalar_names():
     row = hc.compare([REC], [PAGE], [{"temple_id": "T1", "confidence": "exact"}])[0]
     assert (row["link"], row["check"], row["hrce_has_text"]) == ("exact", "confirmed", "yes")
     assert row["hrce_pariharam"] == "அருள்மிகு இராகு பகவான்" and row["hrce_prayer"] == ""
+    assert (row["two_source"], row["two_source_themes"]) == ("pariharam", "rahu_ketu_naga")
     assert row["rahu_ketu_naga"] == "yes"            # named by both
     assert row["marriage"] == "no" and row["child_boon"] == "no"         # Dinamalar only
     assert row["sani"] == "" and row["pitru"] == ""                      # Dinamalar does not name them
     empty = hc.compare([REC], [{**PAGE, "history_ta": "", "speciality": []}], [])[0]
-    assert empty["hrce_has_text"] == "no" and empty["rahu_ketu_naga"] == "?"
+    assert empty["hrce_has_text"] == "no" and empty["rahu_ketu_naga"] == "?" and empty["two_source"] == ""
+    # no remedy heading (a bare "-" or "இல்லை" is none), but the history names what Dinamalar names
+    by_text = {**PAGE, "history_ta": PAGE["history_ta"] + " இது ராகு தோஷ நிவர்த்தி தலம்.",
+               "speciality": [{"kind": "பரிகாரம்", "heading": "-"}, {"kind": "பரிகாரம்", "heading": "இல்லை"}]}
+    row = hc.compare([REC], [by_text], [])[0]
+    assert (row["hrce_pariharam"], row["two_source"], row["two_source_themes"]) == ("", "theme", "rahu_ketu_naga")
+    # a doubtful link is never counted as two sources
+    wrong = {**PAGE, "hrce_title_ta": "அருள்மிகு சந்திரமொழீஸ்வரர் திருக்கோயில், மேலையூர் - 612204, தஞ்சாவூர் மாவட்டம்"}
+    assert hc.compare([REC], [wrong], [])[0]["two_source"] == ""

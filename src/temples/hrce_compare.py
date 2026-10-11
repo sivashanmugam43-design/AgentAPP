@@ -6,6 +6,8 @@ its deity's) name is nearly the same; otherwise `doubtful`, and its HR&CE text s
 
 output/hrce_compare.csv has one row per linked temple: the two names, the check, HR&CE's remedy (பரிகாரம்) and
 prayer (பிரார்த்தனை) headings, and for each theme named by Dinamalar's prayer text whether HR&CE's text names it.
+`two_source` marks the temples where both sources speak: `pariharam` (HR&CE lists a remedy) or `theme` (HR&CE's
+text names a theme Dinamalar names); it is blank for a doubtful link.
 """
 
 import csv
@@ -30,8 +32,10 @@ THEMES: Dict[str, str] = {
     "child_boon": r"புத்திர|குழந்தை|மகப்பேறு|பிள்ளைப்பேறு|பிள்ளை வரம்|சந்தான",
     "marriage": r"திருமண|கல்யாண|விவாக|மாங்கல்ய",
 }
-COLUMNS = (["temple_id", "hrce_no", "link", "check", "name_ta", "town_ta", "hrce_name_ta", "hrce_has_text",
-            "hrce_pariharam", "hrce_prayer"] + [f"{t}" for t in THEMES])
+COLUMNS = (["temple_id", "hrce_no", "link", "check", "two_source", "two_source_themes", "name_ta", "town_ta",
+            "hrce_name_ta", "hrce_has_text", "hrce_pariharam", "hrce_prayer"] + [f"{t}" for t in THEMES])
+# headings that say nothing ("-", "இல்லை" = none)
+_EMPTY_HEADING = re.compile(r"^[\s\-–.]*$|^இல்லை\.?$")
 
 
 def check_link(rec: Dict, hrce: Dict) -> str:
@@ -76,13 +80,22 @@ def compare(records: List[Dict], hrce_records: List[Dict], links: List[Dict]) ->
             "name_ta": rec.get("name_ta") or "", "town_ta": rec.get("town_ta") or "",
             "hrce_name_ta": h.get("hrce_title_ta") or h.get("hrce_title") or "",
             "hrce_has_text": "yes" if has_text else "no",
-            "hrce_pariharam": "; ".join(s["heading"] for s in spec if "பரிகார" in s["kind"] and s["heading"]),
-            "hrce_prayer": "; ".join(s["heading"] for s in spec if "பிரார்த்த" in s["kind"] and s["heading"]),
+            "hrce_pariharam": "; ".join(s["heading"] for s in spec if "பரிகார" in s["kind"]
+                                        and not _EMPTY_HEADING.match(s["heading"])),
+            "hrce_prayer": "; ".join(s["heading"] for s in spec if "பிரார்த்த" in s["kind"]
+                                     and not _EMPTY_HEADING.match(s["heading"])),
         }
         for theme, words in THEMES.items():
             claimed = bool(re.search(words, dinamalar))
             # blank: Dinamalar does not name it; yes / no: whether HR&CE's text names it; ?: HR&CE has no text
             row[theme] = "" if not claimed else "?" if not has_text else "yes" if re.search(words, text) else "no"
+        # Two sources: the link is confirmed, and HR&CE itself speaks of a remedy or prayer here.
+        #   pariharam  HR&CE lists a remedy (பரிகாரம்) for the temple: the department's own statement
+        #   theme      no remedy heading, but HR&CE's text names a theme that Dinamalar's prayer text names
+        both = [t for t in THEMES if row[t] == "yes"]
+        row["two_source_themes"] = "; ".join(both)
+        row["two_source"] = ("" if row["check"] != "confirmed" else "pariharam" if row["hrce_pariharam"]
+                             else "theme" if both else "")
         rows.append(row)
     return rows
 
@@ -104,5 +117,6 @@ def stage_compare(output_dir: Optional[Path] = None) -> Dict[str, int]:
     good = [r for r in rows if r["check"] == "confirmed"]
     stats = {"read": len(rows), "confirmed": len(good), "doubtful": len(rows) - len(good),
              "confirmed_with_text": sum(r["hrce_has_text"] == "yes" for r in good),
-             "confirmed_with_pariharam": sum(bool(r["hrce_pariharam"]) for r in good)}
+             "two_source_pariharam": sum(r["two_source"] == "pariharam" for r in rows),
+             "two_source_theme": sum(r["two_source"] == "theme" for r in rows)}
     return stats

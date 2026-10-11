@@ -244,4 +244,7 @@ def district_counts(store: Store) -> List[Dict[str, Any]]:
     names = {d["district_id"]: d["district_name"] for d in store.load_districts()}
     return [{"district_id": did, "district_name": names.get(did, ""), "listed": listed[did],
              "scraped": scraped[did]}
-            for did in sorted(set(listed) | set(scraped), key=lambda d: int(d or 0))]  # "" = category-only temple
+            # "" = category-only temple. Ids are the site's numbers, but a data folder may hold relabelled ones
+            # (D001 ...), so sort numbers by value and anything else by its text.
+            for did in sorted(set(listed) | set(scraped),
+                              key=lambda d: (0, int(d or 0), "") if str(d or "0").isdigit() else (1, 0, str(d)))]
