@@ -89,6 +89,16 @@ python main.py --stage hrce-compare                                    # writes 
   (yes / no = HR&CE's text names it or not, ? = HR&CE has no text, blank = Dinamalar does not name it).
 - The detail behind each speciality heading opens in a pop-up and is not read.
 
+## Keeping the PC awake for a long run
+
+A run that takes hours stalls if the PC goes to sleep. `Awake.ps1` asks Windows not to sleep while the run is
+going, checks once a minute, and releases the request when the run ends (or after `-MaxHours`, 3 by default). It
+changes no power settings. Start the run, then in another PowerShell window:
+
+```powershell
+.\Awake.ps1 -Match "*main.py*--stage hrce*"
+```
+
 ## Politeness
 
 At most 3 requests in flight. Each request slot waits a random 1–2 s after every request.
