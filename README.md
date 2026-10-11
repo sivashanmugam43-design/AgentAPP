@@ -63,6 +63,28 @@ Temples that are not there yet are fetched like stage 3 and appended (`source` =
 no `district_id`, because a category list doesn't give one. A temple in several lists has one row
 per list. A list that fails part-way is not saved and is read again on the next run.
 
+## HR&CE as a second source
+
+`hrce-link` and `hrce` add what the HR&CE Department's own site (hrce.tn.gov.in) says about a temple, beside
+Dinamalar's text. The site's search form is behind a CAPTCHA and is not used.
+
+```bash
+python main.py --stage hrce-link --register "Latest Temple List.pdf"   # writes output/hrce_register.csv, hrce_links.csv
+python main.py --stage hrce                                            # reads the linked temples' pages
+```
+
+| Stage | Reads | Writes |
+|---|---|---|
+| hrce-link | the department's published temple register (a PDF: number, name, place, pincode for every temple) and `temples.jsonl` | `output/hrce_register.csv` (the register, its Tamil repaired) and `output/hrce_links.csv`: one row per temple with the HR&CE number and a confidence of `exact`, `likely` or `none` |
+| hrce | `history.php?tid=N` and `speciality.php?tid=N` for each linked temple | `output/hrce.jsonl`: the page's own name (English and Tamil), the history text, and the speciality list (kind and heading; a kind of பரிகாரம் is the department's statement of what the temple is a remedy for) |
+
+- The register PDF was printed in a legacy Tamil font, so its text comes out scrambled. `hrce_register.repair`
+  restores it from a table of 53 stand-in characters and three rules for displaced marks.
+- A temple is linked by pincode first, then by place name, comparing the consonants of the temple's name and of its
+  deity's names. A link is `exact` only with the same pincode and a clear lead over the next candidate.
+- Each HR&CE record keeps the name printed on the page, so a wrong link shows up when the two names are compared.
+- The detail behind each speciality heading opens in a pop-up and is not read.
+
 ## Politeness
 
 At most 3 requests in flight. Each request slot waits a random 1–2 s after every request.

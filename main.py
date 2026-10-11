@@ -27,7 +27,7 @@ from src.temples.store import Store
 
 log = logging.getLogger("agentapp")
 
-STAGES = ["1", "2", "3", "categories", "translate", "export", "all"]
+STAGES = ["1", "2", "3", "categories", "hrce-link", "hrce", "translate", "export", "all"]
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -55,10 +55,13 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--stage", choices=STAGES, default="all",
                         help="1 = districts, 2 = temple index, 3 = temple details, categories = the "
                              "site's menu lists 1-28 (temples not scraped yet are added), translate = fill "
-                             "missing English with the local model (translate.py), export = CSV/XLSX; "
+                             "missing English with the local model (translate.py), hrce-link = link the temples to "
+                             "the HR&CE register (--register), hrce = the HR&CE pages of the linked temples, "
+                             "export = CSV/XLSX; "
                              "default: all (1, 2, 3, export)")
     parser.add_argument("--category", type=int, choices=[c[0] for c in CATEGORIES], metavar="N",
                         help="Only this menu list in the categories stage (1-28, no 23)")
+    parser.add_argument("--register", help="The HR&CE temple register PDF, for the hrce-link stage")
     parser.add_argument("--district", help="Only this district id (e.g. 46 = Chennai) in stages 2, 3, translate")
     parser.add_argument("--limit", type=int, help="Process at most N items in this run "
                                                   "(stage 2: districts, stage 3 / translate: temples)")
@@ -90,6 +93,15 @@ async def run(args) -> int:
     stages = ["1", "2", "3", "export"] if args.stage == "all" else [args.stage]
     failed_before = store.failed_path.stat().st_size if store.failed_path.exists() else 0
 
+    if "hrce-link" in stages:
+        from pathlib import Path
+        from src.temples.hrce_register import stage_link
+        if not args.register or not Path(args.register).exists():
+            log.error("Give the HR&CE register PDF with --register <file>.")
+            return 2
+        log.info(f"HR&CE links: {stage_link(Path(args.register))}")
+        return 0
+
     from src.temples.scraper import PoliteClient
     async with PoliteClient() as client:
         if "1" in stages or "2" in stages:
@@ -110,6 +122,10 @@ async def run(args) -> int:
         if "categories" in stages:
             stats = await pipeline.stage_categories(client, store, args.category, args.limit)
             log.info(f"Categories: {dict(stats)}")
+        if "hrce" in stages:
+            from src.temples.hrce import HrceStore, stage_hrce
+            stats = await stage_hrce(client, HrceStore(), args.limit)
+            log.info(f"HR&CE: {stats}")
     if "translate" in stages:
         import translate
         argv = ["--input", str(store.records_path)]
