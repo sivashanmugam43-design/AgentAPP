@@ -27,7 +27,7 @@ from src.temples.store import Store
 
 log = logging.getLogger("agentapp")
 
-STAGES = ["1", "2", "3", "categories", "hrce-link", "hrce", "translate", "export", "all"]
+STAGES = ["1", "2", "3", "categories", "hrce-link", "hrce", "hrce-compare", "translate", "export", "all"]
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -57,6 +57,7 @@ def parse_args(argv=None) -> argparse.Namespace:
                              "site's menu lists 1-28 (temples not scraped yet are added), translate = fill "
                              "missing English with the local model (translate.py), hrce-link = link the temples to "
                              "the HR&CE register (--register), hrce = the HR&CE pages of the linked temples, "
+                             "hrce-compare = HR&CE beside Dinamalar, with each link checked, "
                              "export = CSV/XLSX; "
                              "default: all (1, 2, 3, export)")
     parser.add_argument("--category", type=int, choices=[c[0] for c in CATEGORIES], metavar="N",
@@ -100,6 +101,10 @@ async def run(args) -> int:
             log.error("Give the HR&CE register PDF with --register <file>.")
             return 2
         log.info(f"HR&CE links: {stage_link(Path(args.register))}")
+        return 0
+    if "hrce-compare" in stages:
+        from src.temples.hrce_compare import stage_compare
+        log.info(f"HR&CE beside Dinamalar: {stage_compare()}")
         return 0
 
     from src.temples.scraper import PoliteClient

@@ -71,6 +71,7 @@ Dinamalar's text. The site's search form is behind a CAPTCHA and is not used.
 ```bash
 python main.py --stage hrce-link --register "Latest Temple List.pdf"   # writes output/hrce_register.csv, hrce_links.csv
 python main.py --stage hrce                                            # reads the linked temples' pages
+python main.py --stage hrce-compare                                    # writes output/hrce_compare.csv
 ```
 
 | Stage | Reads | Writes |
@@ -82,7 +83,10 @@ python main.py --stage hrce                                            # reads t
   restores it from a table of 53 stand-in characters and three rules for displaced marks.
 - A temple is linked by pincode first, then by place name, comparing the consonants of the temple's name and of its
   deity's names. A link is `exact` only with the same pincode and a clear lead over the next candidate.
-- Each HR&CE record keeps the name printed on the page, so a wrong link shows up when the two names are compared.
+- Each HR&CE record keeps the name printed on the page. `hrce-compare` checks every link against it: a row is
+  `confirmed` when the place is the same and the name nearly so (or the pincode and the very same name), else
+  `doubtful`. The same file sets HR&CE's remedy and prayer headings beside the themes Dinamalar's prayer text names
+  (yes / no = HR&CE's text names it or not, ? = HR&CE has no text, blank = Dinamalar does not name it).
 - The detail behind each speciality heading opens in a pop-up and is not read.
 
 ## Politeness
